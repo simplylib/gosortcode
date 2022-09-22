@@ -1,5 +1,7 @@
 package testdata
 
+import "fmt"
+
 // Animal is a struct with a name
 type Animal struct {
 	Name string
@@ -20,7 +22,16 @@ func (p *Person) Name() string {
 	return a.Name
 }
 
+type Namer interface {
+	Name() string
+}
+
 // GetName of a namer
-func GetName(namer interface{ Name() string }) string {
-	return namer.Name()
+func GetName(n Namer) string {
+	return n.Name()
+}
+
+// PrintName of a namer
+func PrintName(n Namer) {
+	fmt.Println(n)
 }

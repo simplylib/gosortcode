@@ -33,6 +33,18 @@ func (s structs) Decls() []dst.Decl {
 	return decls
 }
 
+func (s *structs) ClearNonStructs() {
+	old := *s
+	var ns []structData
+	for i := range old {
+		if old[i].struc == nil {
+			continue
+		}
+		ns = append(ns, old[i])
+	}
+	*s = ns
+}
+
 func (s structs) Len() int {
 	return len(s)
 }
@@ -57,6 +69,7 @@ func format(filename string, reader io.Reader, writer io.Writer) error {
 	}
 
 	var (
+		imports         []dst.Decl
 		structs         structs
 		destructedDecls []dst.Decl
 	)
@@ -66,6 +79,10 @@ declloop:
 		switch t := decl.(type) {
 		case *dst.GenDecl:
 			if t.Tok != token.TYPE {
+				if t.Tok == token.IMPORT {
+					imports = append(imports, decl)
+					continue
+				}
 				destructedDecls = append(destructedDecls, decl)
 				continue
 			}
@@ -119,12 +136,14 @@ declloop:
 		default:
 			destructedDecls = append(destructedDecls, decl)
 		}
-
 	}
+
+	structs.ClearNonStructs()
 
 	sort.Sort(structs)
 
-	astFile.Decls = structs.Decls()
+	astFile.Decls = imports
+	astFile.Decls = append(astFile.Decls, structs.Decls()...)
 	astFile.Decls = append(astFile.Decls, destructedDecls...)
 
 	return decorator.Fprint(writer, astFile)
