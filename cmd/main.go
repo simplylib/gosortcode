@@ -3,6 +3,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 func run() error {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 
-	printDiff := flag.Bool("d", false, "print diff")
+	//printDiff := flag.Bool("d", false, "print diff")
 	writeToFile := flag.Bool("w", false, "write formatted versions back to file")
 	writeToStdout := flag.Bool("o", true, "write to stdout")
 
@@ -24,27 +25,45 @@ func run() error {
 
 	flag.Parse()
 
-	_ = printDiff
-	_ = writeToFile
-	_ = writeToStdout
-
 	if len(flag.Args()) != 1 {
 		flag.CommandLine.Usage()
 		os.Exit(1)
 	}
 
-	sourceFile, err := os.Open(filepath.Clean(flag.Args()[0]))
-	if err != nil {
-		return fmt.Errorf("could not open file (%v) due to error (%w)", filepath.Clean(flag.Args()[0]), err)
-	}
-	defer func() { // todo: replace with https://github.com/golang/go/issues/53435
-		err = multierror.Append(err, sourceFile.Close())
-	}()
+	var (
+		writer     io.Writer
+		sourceFile io.ReadCloser
+		err        error
+	)
+	if *writeToStdout {
+		var f *os.File
+		f, err = os.Open(filepath.Clean(flag.Args()[0]))
+		if err != nil {
+			return fmt.Errorf("could not open file (%v) due to error (%w)", filepath.Clean(flag.Args()[0]), err)
+		}
+		defer func() { // todo: replace with https://github.com/golang/go/issues/53435
+			err = multierror.Append(err, f.Close())
+		}()
+		writer = os.Stdout
+	} else if *writeToFile {
+		var f *os.File
+		f, err = os.OpenFile(filepath.Clean(flag.Args()[0]), os.O_TRUNC|os.O_RDWR, 0o655)
+		if err != nil {
+			return fmt.Errorf("could not open file (%v) due to error (%w)", filepath.Clean(flag.Args()[0]), err)
+		}
+		defer func() { // todo: replace with https://github.com/golang/go/issues/53435
+			err = multierror.Append(err, f.Close())
+		}()
 
-	err = format(sourceFile.Name(), sourceFile, os.Stdout)
-	if err != nil {
-		return fmt.Errorf("could not parse (%v) due to error (%w)", sourceFile.Name(), err)
+		writer = f
 	}
+
+	err = format(flag.Args()[0], sourceFile, writer)
+	if err != nil {
+		return fmt.Errorf("could not parse (%v) due to error (%w)", flag.Args()[0], err)
+	}
+
+	return nil
 
 	return nil
 }
