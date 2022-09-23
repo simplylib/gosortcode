@@ -4,22 +4,22 @@ import "fmt"
 
 // Animal is a struct with a name
 type Animal struct {
-	Name string
+	name string
 }
 
 // Name of the Animal
 func (a *Animal) Name() string {
-	return a.Name
+	return a.name
 }
 
 // Person is a struct with a name
 type Person struct {
-	Name string
+	name string
 }
 
 // Name of the Person
 func (p *Person) Name() string {
-	return a.Name
+	return p.name
 }
 
 type Namer interface {
@@ -34,4 +34,23 @@ func GetName(n Namer) string {
 // PrintName of a namer
 func PrintName(n Namer) {
 	fmt.Println(n)
+}
+
+type Name int
+
+const (
+	John Name = iota
+	Jenny
+	Bob
+)
+
+func (n Name) IsValid() bool {
+	switch n {
+	case John,
+		Jenny,
+		Bob:
+		return true
+	default:
+		return false
+	}
 }

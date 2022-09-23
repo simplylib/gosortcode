@@ -1,8 +1,11 @@
 package cmd
 
-import "bytes"
-import "testing"
-import _ "embed"
+import (
+	"bytes"
+	"testing"
+
+	_ "embed"
+)
 
 //go:embed testdata/unsorted.go
 var unsortedFile []byte
@@ -20,6 +23,4 @@ func TestFormat(t *testing.T) {
 	if bytes.Compare(sortedFile, buf.Bytes()) != 0 {
 		t.Fatalf("wanted:\n%v\ngot:\n%v\n", string(sortedFile), string(buf.Bytes()))
 	}
-
-	
 }

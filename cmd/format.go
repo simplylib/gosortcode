@@ -14,46 +14,34 @@ import (
 
 func formatPackage() {} // todo: add ability to format an entire package
 
-type structData struct {
+type typeGroup struct {
 	name    string
-	struc   dst.Decl
+	parent  dst.Decl
 	methods []dst.Decl
 }
 
-// structs complies with sort/Interface
-type structs []structData
+// typeGroups complies with sort/Interface
+type typeGroups []typeGroup
 
-func (s structs) Decls() []dst.Decl {
+func (s typeGroups) Decls() []dst.Decl {
 	//decls starts with a reasonable amount: since there are at least len(structs) decls
 	decls := make([]dst.Decl, 0, len(s))
 	for i := range s {
-		decls = append(decls, s[i].struc)
+		decls = append(decls, s[i].parent)
 		decls = append(decls, s[i].methods...)
 	}
 	return decls
 }
 
-func (s *structs) ClearNonStructs() {
-	old := *s
-	var ns []structData
-	for i := range old {
-		if old[i].struc == nil {
-			continue
-		}
-		ns = append(ns, old[i])
-	}
-	*s = ns
-}
-
-func (s structs) Len() int {
+func (s typeGroups) Len() int {
 	return len(s)
 }
 
-func (s structs) Less(i, j int) bool {
+func (s typeGroups) Less(i, j int) bool {
 	return strings.Compare(s[i].name, s[j].name) < 0
 }
 
-func (s structs) Swap(i, j int) {
+func (s typeGroups) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
@@ -69,9 +57,9 @@ func format(filename string, reader io.Reader, writer io.Writer) error {
 	}
 
 	var (
-		imports         []dst.Decl
-		structs         structs
-		destructedDecls []dst.Decl
+		imports  []dst.Decl
+		types    typeGroups
+		nonTypes []dst.Decl
 	)
 
 declloop:
@@ -83,7 +71,7 @@ declloop:
 					imports = append(imports, decl)
 					continue
 				}
-				destructedDecls = append(destructedDecls, decl)
+				nonTypes = append(nonTypes, decl)
 				continue
 			}
 
@@ -92,27 +80,22 @@ declloop:
 				return fmt.Errorf("expected a typeSpec after type token got (%v)", t.Specs[0])
 			}
 
-			_, ok = s.Type.(*dst.StructType)
-			if !ok {
-				destructedDecls = append(destructedDecls, decl)
-				continue
-			}
-
-			for i := range structs {
-				if structs[i].name != s.Name.Name {
+			// todo: replace with a search function on types
+			for i := range types {
+				if types[i].name != s.Name.Name {
 					continue
 				}
-				structs[i].struc = decl
+				types[i].parent = decl
 				continue declloop
 			}
 
-			structs = append(structs, structData{
-				name:  s.Name.Name,
-				struc: decl,
+			types = append(types, typeGroup{
+				name:   s.Name.Name,
+				parent: decl,
 			})
 		case *dst.FuncDecl:
 			if t.Recv == nil {
-				destructedDecls = append(destructedDecls, decl)
+				nonTypes = append(nonTypes, decl)
 				continue
 			}
 
@@ -124,27 +107,25 @@ declloop:
 				}
 			}
 
-			for i := range structs {
-				if structs[i].name != funcIdent.Name {
+			for i := range types {
+				if types[i].name != funcIdent.Name {
 					continue
 				}
-				structs[i].methods = append(structs[i].methods, decl)
+				types[i].methods = append(types[i].methods, decl)
 				continue declloop
 			}
 
-			structs = append(structs, structData{name: funcIdent.Name, methods: []dst.Decl{decl}})
+			types = append(types, typeGroup{name: funcIdent.Name, methods: []dst.Decl{decl}})
 		default:
-			destructedDecls = append(destructedDecls, decl)
+			nonTypes = append(nonTypes, decl)
 		}
 	}
 
-	structs.ClearNonStructs()
-
-	sort.Sort(structs)
+	sort.Sort(types)
 
 	astFile.Decls = imports
-	astFile.Decls = append(astFile.Decls, structs.Decls()...)
-	astFile.Decls = append(astFile.Decls, destructedDecls...)
+	astFile.Decls = append(astFile.Decls, types.Decls()...)
+	astFile.Decls = append(astFile.Decls, nonTypes...)
 
 	return decorator.Fprint(writer, astFile)
 }
