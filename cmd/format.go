@@ -24,13 +24,49 @@ type typeGroup struct {
 type typeGroups []typeGroup
 
 func (s typeGroups) Decls() []dst.Decl {
+	var noMethodTypes []dst.Spec
+
 	//decls starts with a reasonable amount: since there are at least len(structs) decls
 	decls := make([]dst.Decl, 0, len(s))
 	for i := range s {
+		// if a type Group has no methods, lets put them together in a type block at the top
+		if len(s[i].methods) == 0 {
+			gd, ok := s[i].parent.(*dst.GenDecl)
+			if !ok {
+				panic("expected genDecl")
+			}
+			ts, ok := gd.Specs[0].(*dst.TypeSpec)
+			if !ok {
+				panic("expected typeSpec")
+			}
+			_, ok = ts.Type.(*dst.InterfaceType)
+			if ok {
+				decls = append(decls, s[i].parent)
+				decls = append(decls, s[i].methods...)
+				continue
+			}
+
+			ts.Decs.NodeDecs = gd.Decs.NodeDecs
+
+			noMethodTypes = append(noMethodTypes, gd.Specs...)
+			continue
+		}
+
 		decls = append(decls, s[i].parent)
 		decls = append(decls, s[i].methods...)
 	}
-	return decls
+
+	d := dst.GenDecl{
+		Tok:    token.TYPE,
+		Lparen: true,
+		Specs:  noMethodTypes,
+		Rparen: true,
+	}
+
+	newDecls := make([]dst.Decl, 0, len(decls)+1)
+	newDecls = append(newDecls, &d)
+
+	return append(newDecls, decls...)
 }
 
 func (s typeGroups) Len() int {
@@ -43,6 +79,16 @@ func (s typeGroups) Less(i, j int) bool {
 
 func (s typeGroups) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
+}
+
+func decorationsEmpty(d *dst.NodeDecs) bool {
+	if len(d.End.All()) != 0 {
+		return false
+	}
+	if len(d.Start.All()) != 0 {
+		return false
+	}
+	return true
 }
 
 // format reader and output formatted version to writer
@@ -75,24 +121,51 @@ declloop:
 				continue
 			}
 
-			s, ok := t.Specs[0].(*dst.TypeSpec)
-			if !ok {
-				return fmt.Errorf("expected a typeSpec after type token got (%v)", t.Specs[0])
-			}
-
-			// todo: replace with a search function on types
-			for i := range types {
-				if types[i].name != s.Name.Name {
-					continue
+			for _, spec := range t.Specs {
+				s, ok := spec.(*dst.TypeSpec)
+				if !ok {
+					return fmt.Errorf("expected a typeSpec after type token got (%v)", t.Specs[0])
 				}
-				types[i].parent = decl
-				continue declloop
-			}
 
-			types = append(types, typeGroup{
-				name:   s.Name.Name,
-				parent: decl,
-			})
+				specDecoration := t.Decs.NodeDecs
+
+				if decorationsEmpty(&specDecoration) {
+					specDecoration = *s.Decorations()
+					s.Decs = dst.TypeSpecDecorations{}
+				}
+
+				// todo: replace with a search function on types
+				for i := range types {
+					if types[i].name != s.Name.Name {
+						continue
+					}
+
+					types[i].parent = &dst.GenDecl{
+						Tok: token.TYPE,
+						Specs: []dst.Spec{
+							spec,
+						},
+						Decs: dst.GenDeclDecorations{
+							NodeDecs: specDecoration,
+						},
+					}
+
+					continue declloop
+				}
+
+				types = append(types, typeGroup{
+					name: s.Name.Name,
+					parent: &dst.GenDecl{
+						Tok: token.TYPE,
+						Specs: []dst.Spec{
+							spec,
+						},
+						Decs: dst.GenDeclDecorations{
+							NodeDecs: specDecoration,
+						},
+					},
+				})
+			}
 		case *dst.FuncDecl:
 			if t.Recv == nil {
 				nonTypes = append(nonTypes, decl)

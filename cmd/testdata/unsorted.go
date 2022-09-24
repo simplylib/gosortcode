@@ -22,6 +22,7 @@ func (a *Animal) Name() string {
 	return a.name
 }
 
+// Namer is something implementing a Name() string method
 type Namer interface {
 	Name() string
 }
@@ -36,14 +37,25 @@ func PrintName(n Namer) {
 	fmt.Println(n)
 }
 
-type Name int
+type (
+	// Name of a Person
+	Name int
+	// Weight of a Person
+	Weight int
+	// Age of a Person
+	Age int
+)
 
 const (
-	John Name = iota
+	// John is someone named "John"
+	John Name = iota + 1
+	// Jenny is someone named "Jenny"
 	Jenny
+	// Bob is someone named "Bob"
 	Bob
 )
 
+// IsValid Name
 func (n Name) IsValid() bool {
 	switch n {
 	case John,
@@ -52,5 +64,17 @@ func (n Name) IsValid() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// String of a Name
+func (n Name) String() string {
+	switch n {
+	case John:
+		return "John"
+	case Jenny:
+		return "Jenny"
+	case Bob:
+		return "Bob"
 	}
 }
