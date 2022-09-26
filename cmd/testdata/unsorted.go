@@ -78,3 +78,8 @@ func (n Name) String() string {
 		return "Bob"
 	}
 }
+
+// String version of Car name in a different file
+func (c Car) String() string {
+	return c.Name()
+}

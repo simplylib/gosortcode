@@ -46,6 +46,11 @@ func (n Name) String() string {
 	}
 }
 
+// String version of Car name in a different file
+func (c Car) String() string {
+	return c.Name()
+}
+
 // Namer is something implementing a Name() string method
 type Namer interface {
 	Name() string

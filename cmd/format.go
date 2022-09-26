@@ -6,7 +6,6 @@ import (
 	"go/token"
 	"io"
 	"sort"
-	"strings"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -20,8 +19,35 @@ type typeGroup struct {
 	methods []dst.Decl
 }
 
-// typeGroups complies with sort/Interface
+// typeGroups is a slice of typeGroup lexigraphically sorted by typeGroup.name
 type typeGroups []typeGroup
+
+func (s *typeGroups) GetAndRemoveNoParentMethods() []dst.Decl {
+	var noParentIndexes []int
+	for i := range *s {
+		if (*s)[i].parent != nil {
+			continue
+		}
+		noParentIndexes = append(noParentIndexes, i)
+	}
+
+	if len(noParentIndexes) == 0 {
+		return nil
+	}
+
+	ns := make([]typeGroup, 0, len(*s)-len(noParentIndexes))
+	decls := make([]dst.Decl, 0, len(noParentIndexes))
+	for i := range *s {
+		if sort.SearchInts(noParentIndexes, i) != len(noParentIndexes) {
+			continue
+		}
+		ns = append(ns, (*s)[i])
+	}
+
+	*s = ns
+
+	return decls
+}
 
 func (s typeGroups) Decls() []dst.Decl {
 	var noMethodTypes []dst.Spec
@@ -58,9 +84,9 @@ func (s typeGroups) Decls() []dst.Decl {
 
 	d := dst.GenDecl{
 		Tok:    token.TYPE,
-		Lparen: true,
+		Lparen: len(noMethodTypes) > 1, // no need to type block if its only one type
 		Specs:  noMethodTypes,
-		Rparen: true,
+		Rparen: len(noMethodTypes) > 1, // no need to type block if its only one type
 	}
 
 	newDecls := make([]dst.Decl, 0, len(decls)+1)
@@ -69,16 +95,24 @@ func (s typeGroups) Decls() []dst.Decl {
 	return append(newDecls, decls...)
 }
 
-func (s typeGroups) Len() int {
-	return len(s)
+// Index in typeGroups where name is, -1 if non-existant
+func (s typeGroups) Index(name string) int {
+	i := sort.Search(len(s), func(i int) bool {
+		return s[i].name >= name
+	})
+	if i == len(s) {
+		return -1
+	}
+	return i
 }
 
-func (s typeGroups) Less(i, j int) bool {
-	return strings.Compare(s[i].name, s[j].name) < 0
-}
-
-func (s typeGroups) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
+func (s *typeGroups) Insert(tg typeGroup) {
+	i := sort.Search(len(*s), func(i int) bool {
+		return (*s)[i].name >= tg.name
+	})
+	*s = append(*s, tg)
+	copy((*s)[i+1:], (*s)[i:])
+	(*s)[i] = tg
 }
 
 func decorationsEmpty(d *dst.NodeDecs) bool {
@@ -108,7 +142,6 @@ func format(filename string, reader io.Reader, writer io.Writer) error {
 		nonTypes []dst.Decl
 	)
 
-declloop:
 	for _, decl := range astFile.Decls {
 		switch t := decl.(type) {
 		case *dst.GenDecl:
@@ -124,7 +157,7 @@ declloop:
 			for _, spec := range t.Specs {
 				s, ok := spec.(*dst.TypeSpec)
 				if !ok {
-					return fmt.Errorf("expected a typeSpec after type token got (%v)", t.Specs[0])
+					return fmt.Errorf("expected a typeSpec after type token got (%T)", spec)
 				}
 
 				specDecoration := t.Decs.NodeDecs
@@ -134,26 +167,23 @@ declloop:
 					s.Decs = dst.TypeSpecDecorations{}
 				}
 
-				// todo: replace with a search function on types
-				for i := range types {
-					if types[i].name != s.Name.Name {
-						continue
-					}
-
-					types[i].parent = &dst.GenDecl{
-						Tok: token.TYPE,
-						Specs: []dst.Spec{
-							spec,
+				i := types.Index(s.Name.Name)
+				if i == -1 {
+					types.Insert(typeGroup{
+						name: s.Name.Name,
+						parent: &dst.GenDecl{
+							Tok: token.TYPE,
+							Specs: []dst.Spec{
+								spec,
+							},
+							Decs: dst.GenDeclDecorations{
+								NodeDecs: specDecoration,
+							},
 						},
-						Decs: dst.GenDeclDecorations{
-							NodeDecs: specDecoration,
-						},
-					}
-
-					continue declloop
+					})
+					continue
 				}
-
-				types = append(types, typeGroup{
+				types.Insert(typeGroup{
 					name: s.Name.Name,
 					parent: &dst.GenDecl{
 						Tok: token.TYPE,
@@ -163,8 +193,7 @@ declloop:
 						Decs: dst.GenDeclDecorations{
 							NodeDecs: specDecoration,
 						},
-					},
-				})
+					}})
 			}
 		case *dst.FuncDecl:
 			if t.Recv == nil {
@@ -180,24 +209,33 @@ declloop:
 				}
 			}
 
-			for i := range types {
-				if types[i].name != funcIdent.Name {
-					continue
-				}
-				types[i].methods = append(types[i].methods, decl)
-				continue declloop
-			}
+			i := types.Index(funcIdent.Name)
+			if i == -1 {
+				types.Insert(typeGroup{
+					name:    funcIdent.Name,
+					methods: []dst.Decl{decl},
+				})
 
-			types = append(types, typeGroup{name: funcIdent.Name, methods: []dst.Decl{decl}})
+				continue
+			}
+			types[i].methods = append(types[i].methods, decl)
 		default:
 			nonTypes = append(nonTypes, decl)
 		}
 	}
 
-	sort.Sort(types)
+	noParentMethods := types.GetAndRemoveNoParentMethods()
+	typeDecls := types.Decls()
 
-	astFile.Decls = imports
-	astFile.Decls = append(astFile.Decls, types.Decls()...)
+	astFile.Decls = make([]dst.Decl, 0, len(noParentMethods)+len(imports)+len(typeDecls)+len(nonTypes))
+
+	// imports first
+	astFile.Decls = append(astFile.Decls, imports...)
+	// sorted types next
+	astFile.Decls = append(astFile.Decls, typeDecls...)
+	// methods without types in this file
+	astFile.Decls = append(astFile.Decls, noParentMethods...)
+	// everything else
 	astFile.Decls = append(astFile.Decls, nonTypes...)
 
 	return decorator.Fprint(writer, astFile)
