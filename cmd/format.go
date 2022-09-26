@@ -125,23 +125,12 @@ func decorationsEmpty(d *dst.NodeDecs) bool {
 	return true
 }
 
-// format reader and output formatted version to writer
-// formatting actions:
-// * sorts structures by name, grouping methods on structure
-// todo: sort by usage in c-like fashion in order of use, a object should be defined before being used
-func format(filename string, reader io.Reader, writer io.Writer) error {
-	fileSet := token.NewFileSet()
-	astFile, err := decorator.ParseFile(fileSet, filename, reader, parser.ParseComments)
-	if err != nil {
-		return fmt.Errorf("could not parse ast (%w)", err)
-	}
-
+func sortASTFile(astFile *dst.File) error {
 	var (
 		imports  []dst.Decl
 		types    typeGroups
 		nonTypes []dst.Decl
 	)
-
 	for _, decl := range astFile.Decls {
 		switch t := decl.(type) {
 		case *dst.GenDecl:
@@ -238,5 +227,22 @@ func format(filename string, reader io.Reader, writer io.Writer) error {
 	// everything else
 	astFile.Decls = append(astFile.Decls, nonTypes...)
 
+	return nil
+}
+
+// format reader and output formatted version to writer
+// formatting actions:
+// * sorts structures by name, grouping methods on structure
+// todo: sort by usage in c-like fashion in order of use, a object should be defined before being used
+func format(filename string, reader io.Reader, writer io.Writer) error {
+	fileSet := token.NewFileSet()
+	astFile, err := decorator.ParseFile(fileSet, filename, reader, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("could not parse ast (%w)", err)
+	}
+	err = sortASTFile(astFile)
+	if err != nil {
+		return err
+	}
 	return decorator.Fprint(writer, astFile)
 }
