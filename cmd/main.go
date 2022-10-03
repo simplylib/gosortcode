@@ -1,3 +1,4 @@
+// Package cmd handles all the logic for the gosortcode command
 package cmd
 
 import (
@@ -15,8 +16,8 @@ func run() error {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 
 	//printDiff := flag.Bool("d", false, "print diff")
-	writeToFile := flag.Bool("w", false, "write formatted versions back to file")
-	writeToStdout := flag.Bool("o", true, "write to stdout")
+	writeToFile := flag.Bool("w", false, "write formatted versions back to file, exclusive with -o")
+	writeToStdout := flag.Bool("o", false, "write to stdout, exclude with -w")
 
 	flag.CommandLine.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Usage: "+os.Args[0]+" <flags> <filepath>")
@@ -25,7 +26,7 @@ func run() error {
 
 	flag.Parse()
 
-	if len(flag.Args()) != 1 {
+	if len(flag.Args()) != 1 || !*writeToFile && !*writeToStdout {
 		flag.CommandLine.Usage()
 		os.Exit(1)
 	}
@@ -35,27 +36,47 @@ func run() error {
 		sourceFile io.ReadCloser
 		err        error
 	)
-	if *writeToStdout {
-		var f *os.File
-		f, err = os.Open(filepath.Clean(flag.Args()[0]))
+	var f *os.File
+	f, err = os.Open(filepath.Clean(flag.Args()[0]))
+	if err != nil {
+		return fmt.Errorf("could not open file (%v) due to error (%w)", filepath.Clean(flag.Args()[0]), err)
+	}
+	defer func() { // todo: replace with https://github.com/golang/go/issues/53435
 		if err != nil {
-			return fmt.Errorf("could not open file (%v) due to error (%w)", filepath.Clean(flag.Args()[0]), err)
-		}
-		defer func() { // todo: replace with https://github.com/golang/go/issues/53435
 			err = multierror.Append(err, f.Close())
-		}()
+		}
+	}()
+
+	if *writeToStdout {
 		writer = os.Stdout
 	} else if *writeToFile {
-		var f *os.File
-		f, err = os.OpenFile(filepath.Clean(flag.Args()[0]), os.O_TRUNC|os.O_RDWR, 0o655)
+		var f2 *os.File
+		f2, err = os.CreateTemp("", filepath.Base(f.Name()))
 		if err != nil {
-			return fmt.Errorf("could not open file (%v) due to error (%w)", filepath.Clean(flag.Args()[0]), err)
+			return fmt.Errorf("could not create a temporary file (%v)", err)
 		}
-		defer func() { // todo: replace with https://github.com/golang/go/issues/53435
-			err = multierror.Append(err, f.Close())
+		defer func() {
+			err2 := f.Close()
+			if err2 != nil {
+				err = multierror.Append(err, err2)
+				return
+			}
+			err2 = os.Remove(f2.Name())
+			if err2 != nil {
+				err = multierror.Append(err, err2)
+			}
+			err2 = f2.Close()
+			if err2 != nil {
+				err = multierror.Append(err, err2)
+				return
+			}
+			err2 = os.Rename(f2.Name(), f.Name())
+			if err2 != nil {
+				err = multierror.Append(err, err2)
+				return
+			}
 		}()
-
-		writer = f
+		writer = f2
 	}
 
 	err = format(flag.Args()[0], sourceFile, writer)
@@ -64,10 +85,9 @@ func run() error {
 	}
 
 	return nil
-
-	return nil
 }
 
+// Main function for cmd
 func Main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
