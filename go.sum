@@ -1,7 +1,7 @@
 github.com/SomethingBot/multierror v0.0.2 h1:G4UFLIKkks22pNHeFqq+9Y0NCKbzSsgg8gv0y7LyDKc=
 github.com/SomethingBot/multierror v0.0.2/go.mod h1:gi+Fhd8OHWGe1QO9Hb9pRRYO4Md+alSa6cpqU2otCMM=
-github.com/dave/dst v0.27.0 h1:vh51Zc/7bH5YfbspFsEizLuQ1xm6zDQWMJiIlZhiNQ4=
-github.com/dave/dst v0.27.0/go.mod h1:eF/UOVnw9Ech3NkZFCdtujtISJFRYf11+I93p+RI5S4=
+github.com/dave/dst v0.27.1 h1:TO1Jlnfvkxj5OrJTqUexWBQKVhim8PfefUDOH0yrLUw=
+github.com/dave/dst v0.27.1/go.mod h1:eF/UOVnw9Ech3NkZFCdtujtISJFRYf11+I93p+RI5S4=
 github.com/dave/jennifer v1.5.0 h1:HmgPN93bVDpkQyYbqhCHj5QlgvUkvEOzMyEvKLgCRrg=
 github.com/sergi/go-diff v1.2.0 h1:XU+rvMAioB0UC3q1MFrIQy4Vo5/4VsRDQQXHsEya6xQ=
 golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 h1:6zppjxzCulZykYSLyVDYbneBfbaBIQPYMevg0bEwv2s=
