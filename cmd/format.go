@@ -235,14 +235,15 @@ func sortASTFile(astFile *dst.File) error {
 // * sorts structures by name, grouping methods on structure
 // todo: sort by usage in c-like fashion in order of use, a object should be defined before being used
 func format(filename string, reader io.Reader, writer io.Writer) error {
-	fileSet := token.NewFileSet()
-	astFile, err := decorator.ParseFile(fileSet, filename, reader, parser.ParseComments)
+	astFile, err := decorator.ParseFile(token.NewFileSet(), filename, reader, parser.ParseComments)
 	if err != nil {
 		return fmt.Errorf("could not parse ast (%w)", err)
 	}
+
 	err = sortASTFile(astFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not sort ast file (%w)", err)
 	}
+
 	return decorator.Fprint(writer, astFile)
 }

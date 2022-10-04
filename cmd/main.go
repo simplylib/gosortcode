@@ -31,13 +31,7 @@ func run() error {
 		os.Exit(1)
 	}
 
-	var (
-		writer     io.Writer
-		sourceFile io.ReadCloser
-		err        error
-	)
-	var f *os.File
-	f, err = os.Open(filepath.Clean(flag.Args()[0]))
+	f, err := os.Open(filepath.Clean(flag.Args()[0]))
 	if err != nil {
 		return fmt.Errorf("could not open file (%v) due to error (%w)", filepath.Clean(flag.Args()[0]), err)
 	}
@@ -46,7 +40,9 @@ func run() error {
 			err = multierror.Append(err, f.Close())
 		}
 	}()
+	sourceFile := f
 
+	var writer io.Writer
 	if *writeToStdout {
 		writer = os.Stdout
 	} else if *writeToFile {
