@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/SomethingBot/multierror"
+	"github.com/simplylib/multierror"
 )
 
 func run() error {
