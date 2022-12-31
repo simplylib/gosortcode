@@ -12,7 +12,7 @@ import (
 	"github.com/simplylib/multierror"
 )
 
-func run() error {
+func run() (err error) {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 
 	//printDiff := flag.Bool("d", false, "print diff")
@@ -31,7 +31,8 @@ func run() error {
 		os.Exit(1)
 	}
 
-	f, err := os.Open(filepath.Clean(flag.Args()[0]))
+	var f *os.File
+	f, err = os.Open(filepath.Clean(flag.Args()[0]))
 	if err != nil {
 		return fmt.Errorf("could not open file (%v) due to error (%w)", filepath.Clean(flag.Args()[0]), err)
 	}
