@@ -2,7 +2,7 @@ module github.com/simplylib/gosortcode
 
 go 1.18
 
-require github.com/simplylib/multierror v0.0.1
+require github.com/simplylib/multierror v0.0.2
 
 require (
 	github.com/dave/dst v0.27.2
